@@ -1,0 +1,21 @@
+name: aoi_mobile_client
+description: Handheld camera interface for Distributed AI-AOI inspection pipeline.
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0              # Used explicitly for standard raw HTTP connections
+  image_picker: ^1.0.7      # Interface to handheld mobile optics
+  shared_preferences: ^2.2.2 # Lightweight local state storage for JWT retention
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
