@@ -169,7 +169,7 @@ workflows:
           echo ">>> Refreshing dependency trees..."
           flutter pub get
           echo ">>> Compiling Release Engine Binary..."
-          flutter build apk --release --no-sound-null-safety
+          flutter build apk --release
 
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
