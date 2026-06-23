@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   // Use pure HTTP context for the target environment
-  static const String baseUrl = "http://YOUR_GCP_VM_IP_HERE"; 
+  static const String baseUrl = "http://136.119.231.2:5010"; 
 
   static Future<Map<String, dynamic>?> login(String username, String password) async {
     final response = await http.post(
