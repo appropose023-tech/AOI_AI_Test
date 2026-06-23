@@ -94,7 +94,10 @@ workflows:
           </network-security-config>
           EOF
 
-          echo ">>> Generating missing MainActivity.java for Android v2 Embedding..."
+          echo ">>> Removing default Kotlin template files to prevent compiler redeclaration conflicts..."
+          rm -rf android/app/src/main/kotlin
+
+          echo ">>> Generating unified MainActivity.java for Android v2 Embedding..."
           mkdir -p android/app/src/main/java/com/example/aoi_mobile_client
           
           cat > android/app/src/main/java/com/example/aoi_mobile_client/MainActivity.java <<EOF
