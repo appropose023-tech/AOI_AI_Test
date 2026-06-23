@@ -1,23 +1,183 @@
 workflows:
-  android-free-build:
-    name: Android Release Build Workflow
+  android-release-build:
+    name: AI AOI Android Release APK Compiler
+    instance_type: mac_mini_m2
     max_build_duration: 30
-    instance_type: mac_mini
+
     environment:
-      groups:
-        - storage
       flutter: stable
+      java: 17
+
     triggering:
       events:
         - push
       branch_patterns:
-        - target: main
+        - pattern: 'main'
+        - pattern: 'master'
+
     scripts:
-      - name: Fetch Flutter packages
+
+      # ----------------------------------------------------
+      # 1. BACKUP REPO SOURCE FILES DYNAMICALLY
+      # ----------------------------------------------------
+      - name: Backup repository
         script: |
-          flutter packages pub get
-      - name: Build Android Release APK
+          echo ">>> Locating and archiving working application state..."
+
+          mkdir -p /tmp/repo/lib
+          mkdir -p /tmp/repo/models
+
+          # Dynamically locate code assets inside sub-directories safely
+          REAL_LIB_DIR=$(find . -type d -name "lib" | grep -v "node_modules" | head -n 1)
+          REAL_PUBSPEC=$(find . -type f -name "pubspec.yaml" | head -n 1)
+
+          if [ -n "$REAL_LIB_DIR" ]; then
+            echo "Found lib folder at: $REAL_LIB_DIR"
+            cp -R "$REAL_LIB_DIR/"* /tmp/repo/lib/
+          else
+            echo "CRITICAL: lib folder not found!"
+            exit 1
+          fi
+
+          if [ -n "$REAL_PUBSPEC" ]; then
+            echo "Found pubspec.yaml at: $REAL_PUBSPEC"
+            cp "$REAL_PUBSPEC" /tmp/repo/pubspec.yaml
+          else
+            echo "CRITICAL: pubspec.yaml not found!"
+            exit 1
+          fi
+
+          echo ">>> Cleaning workspace to prepare for native scaffolding..."
+          find . -mindepth 1 -maxdepth 1 -exec rm -rf {} \;
+
+      # ----------------------------------------------------
+      # 2. CREATE FRESH FLUTTER ANDROID PROJECT
+      # ----------------------------------------------------
+      - name: Scaffold Flutter project
         script: |
+          echo ">>> Scaffolding clean Flutter workspace architecture..."
+          flutter create \
+            --project-name aoi_mobile_client \
+            --org com.example \
+            --platforms=android .
+
+      # ----------------------------------------------------
+      # 3. RESTORE APP FILES
+      # ----------------------------------------------------
+      - name: Restore app source files
+        script: |
+          echo ">>> Restoring source components..."
+
+          rm -rf lib
+          cp -R /tmp/repo/lib ./lib
+
+          if [ -f /tmp/repo/pubspec.yaml ]; then
+            cp /tmp/repo/pubspec.yaml ./pubspec.yaml
+          fi
+
+      # ----------------------------------------------------
+      # 4. COMPILER-INJECTED NATIVE CODE & NETWORK SECURITY
+      # ----------------------------------------------------
+      - name: Inject Android Manifest and Missing Main Activity
+        script: |
+          echo ">>> Creating explicit network security profile for custom unencrypted HTTP contexts..."
+          mkdir -p android/app/src/main/res/xml
+
+          cat > android/app/src/main/res/xml/network_security_config.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+              <domain-config cleartextTrafficPermitted="true">
+                  <domain includeSubdomains="true">localhost</domain>
+                  <domain includeSubdomains="true">127.0.0.1</domain>
+              </domain-config>
+              <base-config cleartextTrafficPermitted="true" />
+          </network-security-config>
+          EOF
+
+          echo ">>> Generating missing MainActivity.java for Android v2 Embedding..."
+          mkdir -p android/app/src/main/java/com/example/aoi_mobile_client
+          
+          cat > android/app/src/main/java/com/example/aoi_mobile_client/MainActivity.java <<EOF
+          package com.example.aoi_mobile_client;
+
+          import io.flutter.embedding.android.FlutterActivity;
+
+          public class MainActivity extends FlutterActivity {
+          }
+          EOF
+
+          echo ">>> Overwriting standard AndroidManifest.xml..."
+          cat > android/app/src/main/AndroidManifest.xml <<EOF
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.example.aoi_mobile_client">
+
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+              <uses-permission android:name="android.permission.CAMERA"/>
+
+              <application
+                  android:name="\${applicationName}"
+                  android:label="AI Optical Inspector"
+                  android:icon="@mipmap/ic_launcher"
+                  android:usesCleartextTraffic="true"
+                  android:networkSecurityConfig="@xml/network_security_config">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTop"
+                      android:theme="@style/LaunchTheme"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+                      android:hardwareAccelerated="true"
+                      android:windowSoftInputMode="adjustResize">
+
+                      <meta-data
+                          android:name="io.flutter.embedding.android.NormalTheme"
+                          android:resource="@style/NormalTheme"/>
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+
+                  </activity>
+
+                  <meta-data
+                      android:name="flutterEmbedding"
+                      android:value="2"/>
+
+              </application>
+
+          </manifest>
+          EOF
+
+      # ----------------------------------------------------
+      # 5. DIAGNOSTICS & RESOLUTION DEPS
+      # ----------------------------------------------------
+      - name: Verify Android Build Structure
+        script: |
+          echo "===== SYSTEM STATE CHECK ====="
+          find android -name MainActivity.java
+          echo "===== MANIFEST OUTPUT ====="
+          cat android/app/src/main/AndroidManifest.xml
+
+      # ----------------------------------------------------
+      # 6. RESOLVE DEPENDENCIES & COMPILE
+      # ----------------------------------------------------
+      - name: Build APK
+        script: |
+          echo ">>> Refreshing dependency trees..."
+          flutter pub get
+          echo ">>> Compiling Release Engine Binary..."
           flutter build apk --release --no-sound-null-safety
+
     artifacts:
-      - build/app/outputs/flutter-apk/app-release.apk
+      - build/app/outputs/flutter-apk/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - appropose023@gmail.com
+        notify:
+          success: true
+          failure: true
